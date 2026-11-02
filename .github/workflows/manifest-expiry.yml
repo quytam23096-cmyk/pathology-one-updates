@@ -1,0 +1,43 @@
+name: Signed update manifest expiry
+
+on:
+  schedule:
+    - cron: '23 2 * * *'
+  workflow_dispatch:
+    inputs:
+      notification_test:
+        description: 'Send a clearly marked TEST issue after verifying healthy real metadata'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: pathology-one-manifest-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read only the public operations files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            operations
+          sparse-checkout-cone-mode: true
+      - name: Verify signatures and warn before expiry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          P1_NOTIFICATION_TEST: ${{ github.event.inputs.notification_test || 'false' }}
+        run: |
+          arguments=(--notify)
+          if [[ "$P1_NOTIFICATION_TEST" == 'true' ]]; then
+            arguments+=(--notification-test)
+          fi
+          python3 operations/manifest_monitor.py "${arguments[@]}"
